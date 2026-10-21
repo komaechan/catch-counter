@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5a7c7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="釣果カウンター">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>釣江コハルの釣果カウンター</title>
+<style>
+:root{color-scheme:light;--pink:#f5a7c7;--pink-dark:#c94f83;--ink:#302631;--muted:#776b75;--card:#fff;--bg:#fff7fb;--line:#f0dce6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;padding:env(safe-area-inset-top) 14px calc(18px + env(safe-area-inset-bottom));}
+main{max-width:560px;margin:0 auto}.hero{padding:18px 4px 14px;text-align:center}.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--pink-dark);font-weight:700}.hero h1{font-size:25px;margin:6px 0}.hero p{margin:0;color:var(--muted);font-size:13px}
+.total{background:linear-gradient(135deg,#fbe0ec,#fff);border:1px solid var(--line);border-radius:22px;padding:16px;text-align:center;margin:6px 0 14px}.total .label{font-size:13px;color:var(--muted)}.total strong{display:block;font-size:48px;line-height:1.15;margin:2px 0}.total small{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.fish{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px 12px;box-shadow:0 3px 10px #6e30400a}.fishhead{display:flex;align-items:center;gap:8px}.emoji{font-size:25px}.fishname{font-size:16px;font-weight:750;flex:1}.count{font-size:32px;font-weight:800;text-align:center;margin:8px 0 10px;font-variant-numeric:tabular-nums}.controls{display:grid;grid-template-columns:48px 1fr;gap:8px}.btn{border:0;border-radius:14px;min-height:52px;font-size:22px;font-weight:800;cursor:pointer;touch-action:manipulation}.minus{background:#f2edf0;color:#6e5a67}.plus{background:var(--pink);color:#54263c}.btn:active{transform:scale(.98)}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.secondary{background:#fff;border:1px solid var(--line);border-radius:14px;min-height:46px;font-size:14px;font-weight:700;color:var(--ink)}.status{text-align:center;font-size:12px;color:var(--muted);padding:12px 4px 2px}.history{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px}.history summary{font-weight:750;cursor:pointer}.history p{font-size:12px;color:var(--muted);line-height:1.6}.foot{text-align:center;color:var(--muted);font-size:11px;padding:16px 8px}
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">KOHARU FISHING LOG</div>
+    <h1>🎣 釣江コハルの釣果カウンター</h1>
+    <p>釣れたらタップ！ 釣果はこの端末に保存するよ。</p>
+  </header>
+  <section class="total" aria-live="polite">
+    <div class="label">本日の合計</div>
+    <strong id="total">0</strong>
+    <small>匹</small>
+  </section>
+  <section class="grid" id="fishGrid" aria-label="魚種別カウンター"></section>
+  <section class="actions">
+    <button class="secondary" id="undo">↶ ひとつ戻す</button>
+    <button class="secondary" id="reset">今日の記録をリセット</button>
+  </section>
+  <div class="status" id="status" aria-live="polite">端末内への保存を準備中…</div>
+  <details class="history">
+    <summary>使い方・保存について</summary>
+    <p>＋で加算、−で1匹減らせます。「ひとつ戻す」は直前の加算を取り消します。リセットは今日の記録を0に戻します。</p>
+    <p>記録はこのブラウザの端末内保存領域に保存されます。ブラウザのデータ削除やプライベートブラウズでは消えることがあります。大切な釣果は釣行後にスクリーンショットも残してください。</p>
+    <p>ホーム画面への追加・オフライン起動には、HTTPSで公開されたサイトが必要です。このフォルダはそのためのPWA一式です。</p>
+  </details>
+  <footer class="foot">コハルと一緒に、今日の釣果を記録しよう！</footer>
+</main>
+<script>
+const FISH = [
+ {id:"madai",name:"マダイ",emoji:"🐟"},
+ {id:"shimaaji",name:"シマアジ",emoji:"🐠"},
+ {id:"aomono",name:"青物",emoji:"🐟"},
+ {id:"aji",name:"アジ",emoji:"🐟"},
+ {id:"other",name:"その他",emoji:"🐡"}
+];
+const KEY="koharu-fishing-counter-v1";
+let state={date:new Date().toLocaleDateString("sv-SE"),counts:{madai:0,shimaaji:0,aomono:0,aji:0,other:0},history:[]};
+const el=id=>document.getElementById(id);
+function today(){return new Date().toLocaleDateString("sv-SE")}
+function load(){
+ try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&saved.date===today())state=saved;else if(saved){state={date:today(),counts:{madai:0,shimaaji:0,aomono:0,aji:0,other:0},history:[]};save();}}
+ catch(e){el("status").textContent="保存領域を利用できません。通常のブラウズモードで開いてください。";}
+ render();
+}
+function save(){
+ state.date=today();
+ try{localStorage.setItem(KEY,JSON.stringify(state));el("status").textContent="✓ この端末に保存済み";return true}
+ catch(e){el("status").textContent="⚠ 保存できません。スクリーンショット等で記録を残してください。";return false}
+}
+function total(){return Object.values(state.counts).reduce((a,b)=>a+b,0)}
+function render(){
+ el("total").textContent=total();
+ el("fishGrid").innerHTML=FISH.map(f=>`<article class="fish"><div class="fishhead"><span class="emoji">${f.emoji}</span><span class="fishname">${f.name}</span></div><div class="count" id="count-${f.id}">${state.counts[f.id]||0}</div><div class="controls"><button class="btn minus" aria-label="${f.name}を1匹減らす" data-action="minus" data-id="${f.id}">−</button><button class="btn plus" aria-label="${f.name}を1匹追加" data-action="plus" data-id="${f.id}">＋</button></div></article>`).join("");
+}
+el("fishGrid").addEventListener("click",e=>{
+ const b=e.target.closest("button[data-action]");if(!b)return;
+ const id=b.dataset.id,action=b.dataset.action;
+ if(action==="plus"){state.counts[id]=(state.counts[id]||0)+1;state.history.push({id,delta:1});}
+ else if((state.counts[id]||0)>0){state.counts[id]--;state.history.push({id,delta:-1});}
+ save();render();
+});
+el("undo").addEventListener("click",()=>{
+ const last=state.history.pop();if(!last){el("status").textContent="取り消せる操作がないよ";return}
+ state.counts[last.id]=Math.max(0,(state.counts[last.id]||0)-last.delta);save();render();
+});
+el("reset").addEventListener("click",()=>{
+ if(!confirm("今日の釣果をすべて0に戻します。よろしいですか？"))return;
+ state={date:today(),counts:{madai:0,shimaaji:0,aomono:0,aji:0,other:0},history:[]};save();render();
+});
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
+load();
+</script>
+</body>
+</html>
